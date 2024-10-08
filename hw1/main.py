@@ -1,7 +1,8 @@
 import os
 import subprocess
-from typing import Callable, Tuple, Any
+from typing import Callable, Tuple, Any, Dict, Set, Sequence
 
+from fuzzingbook.Coverage import Location
 from fuzzingbook.Fuzzer import Fuzzer, Runner, Outcome
 
 import random
@@ -10,8 +11,8 @@ import networkx as nx
 from ControlFlow import maze, target_tile, generate_maze_code, get_callgraph
 
 from fuzzingbook.MutationFuzzer import FunctionCoverageRunner, MutationCoverageFuzzer
-from fuzzingbook.GreyboxFuzzer import AdvancedMutationFuzzer, GreyboxFuzzer, Mutator, PowerSchedule, Seed, \
-    AFLGoSchedule, CountingGreyboxFuzzer, AFLFastSchedule
+from fuzzingbook.GreyboxFuzzer import (AdvancedMutationFuzzer, GreyboxFuzzer, Mutator, PowerSchedule, Seed
+    , CountingGreyboxFuzzer, AFLFastSchedule)
 
 """
 Реализовать мутатор для лабиринта
@@ -105,6 +106,44 @@ class BlackBoxMutationFuzzer(MutationCoverageFuzzer):
             self.seed_answ.append(seed)
         return result
 
+class DirectedSchedule(PowerSchedule):
+    def __init__(self, distance: Dict[str, int], exponent: float) -> None:
+        self.distance = distance
+        self.exponent = exponent
+
+    def get_func_by_coverage(self, coverage: Set[Location]) -> Set[str]:
+        functions = set()
+        for f, _ in set(coverage):
+            functions.add(f)
+        return functions
+
+    def assignEnergy(self, population: Sequence[Seed]):
+        min_dist = 0xFFFF
+        max_dist = 0
+
+        for seed in population:
+            if seed.distance < 0:
+                num_dist = 0
+                sum_dist = 0
+                for f in self.get_func_by_coverage(seed.coverage):
+                    if f in list(self.distance):
+                        sum_dist += self.distance[f]
+                        num_dist += 1
+                seed.distance = sum_dist / num_dist
+            if seed.distance < min_dist:
+                min_dist = seed.distance
+            if seed.distance > max_dist:
+                max_dist = seed.distance
+
+        for seed in population:
+            if seed.distance == min_dist:
+                if min_dist == max_dist:
+                    seed.energy = 1
+                else:
+                    seed.energy = max_dist - min_dist
+            else:
+                seed.energy = (max_dist - min_dist) / (seed.distance - min_dist)
+
 def maze_test(func: Callable) -> Callable:
     maze_func = func
     def maze_run(seed_str: str) -> bool:
@@ -187,7 +226,7 @@ if __name__ == "__main__":
     print_stats(cgf_afl.population, f"{type(gbf_pw).__name__} {type(afl_cgf_schedule).__name__}")
 
     maze_runner_gbf_afl = FunctionCoverageRunner(maze_test_func)
-    afl_gdf_schedule = AFLGoSchedule(distance=distance, exponent=5)
+    afl_gdf_schedule = DirectedSchedule(distance=distance, exponent=5)
     gdf_afl = GreyboxFuzzer(seeds=seeds, mutator=mutator, schedule=afl_gdf_schedule)
     gdf_afl.runs(runner=maze_runner_gbf_afl, trials=trials)
     print_stats(gdf_afl.population, f"{type(gdf_afl).__name__} {type(afl_gdf_schedule).__name__}")
