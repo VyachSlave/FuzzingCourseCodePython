@@ -223,7 +223,7 @@ if __name__ == "__main__":
     maze_runner_cgf_afl = FunctionCoverageRunner(maze_test_func)
     cgf_afl = CountingGreyboxFuzzer(seeds=seeds, mutator=mutator, schedule=afl_cgf_schedule)
     cgf_afl.runs(runner=maze_runner_cgf_afl, trials=trials)
-    print_stats(cgf_afl.population, f"{type(gbf_pw).__name__} {type(afl_cgf_schedule).__name__}")
+    print_stats(cgf_afl.population, f"{type(cgf_afl).__name__} {type(afl_cgf_schedule).__name__}")
 
     maze_runner_gbf_afl = FunctionCoverageRunner(maze_test_func)
     afl_gdf_schedule = DirectedSchedule(distance=distance, exponent=5)
